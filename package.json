@@ -14,9 +14,7 @@
     "rate-limit-redis": "^4.2.0",
     "cors": "^2.8.5"
   },
-  "devDependencies": {
-    "vercel": "^37.0.0"
-  },
+  "devDependencies": {},
   "scripts": {
     "dev": "vercel dev",
     "deploy": "vercel --prod"
