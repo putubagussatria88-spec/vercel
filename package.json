@@ -1,0 +1,24 @@
+{
+  "name": "madeyoureset-detector",
+  "version": "1.0.0",
+  "description": "CVE-2025-8671 MadeYouReset HTTP/2 vulnerability detector with anti-DDoS",
+  "private": true,
+  "engines": {
+    "node": ">=20.x"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^7.2.0",
+    "ioredis": "^5.4.1",
+    "rate-limit-redis": "^4.2.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "vercel": "^37.0.0"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  }
+}
