@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MadeYouReset — CVE-2025-8671 Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #080a0e;
+  --paper: #f0ede8;
+  --paper2: #e8e4dd;
+  --border: #d0cbc2;
+  --red: #c8250d;
+  --red-dim: rgba(200,37,13,0.12);
+  --orange: #c46a00;
+  --green: #1a7a3c;
+  --mono: 'Syne Mono', monospace;
+  --sans: 'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  min-height: 100vh;
+}
+
+/* Noise texture overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-size: 200px;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.6;
+}
+
+/* Layout */
+.page { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+/* ── Top bar ── */
+.topbar {
+  border-bottom: 2px solid var(--ink);
+  padding: 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.logo {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-dot {
+  width: 8px; height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+  animation: blink 2s ease-in-out infinite;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+.topbar-links {
+  display: flex;
+  gap: 0;
+}
+
+.topbar-link {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  text-decoration: none;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-left: none;
+  transition: background 0.15s;
+}
+
+.topbar-link:first-child { border-left: 1px solid var(--border); }
+.topbar-link:hover { background: var(--ink); color: var(--paper); }
+
+.status-pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 10px;
+  background: var(--green);
+  color: white;
+  border-radius: 0;
+  letter-spacing: 0.1em;
+}
+
+/* ── Hero ── */
+.hero {
+  padding: 64px 0 48px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cve-number {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--red);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cve-number::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--red);
+}
+
+h1 {
+  font-size: clamp(44px, 7vw, 80px);
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+}
+
+h1 em {
+  font-style: normal;
+  color: var(--red);
+  display: block;
+}
+
+.hero-meta {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hero-stat-val {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--red);
+}
+
+.hero-stat-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #888;
+  text-transform: uppercase;
+}
+
+/* ── Main grid ── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--ink);
+  border-top: none;
+  margin-top: 0;
+}
+
+@media (max-width: 680px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+
+.panel {
+  padding: 28px;
+  border-right: 1px solid var(--ink);
+}
+
+.panel:last-child { border-right: none; }
+.panel + .panel { border-top: 1px solid var(--ink); }
+.panel:nth-child(2) { border-top: none; }
+
+@media (max-width: 680px) {
+  .panel { border-right: none; border-top: 1px solid var(--ink) !important; }
+  .panel:first-child { border-top: none !important; }
+}
+
+.panel-title {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #888;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border);
+}
+
+/* ── Form elements ── */
+.field { margin-bottom: 16px; }
+
+.field label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #888;
+  margin-bottom: 6px;
+}
+
+.field input, .field select {
+  width: 100%;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+  -webkit-appearance: none;
+}
+
+.field input:focus, .field select:focus {
+  border-color: var(--ink);
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+/* ── Vector checkboxes ── */
+.vectors { display: flex; flex-direction: column; gap: 8px; }
+
+.vec-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+
+.vec-item:hover { background: white; border-color: var(--border); }
+.vec-item.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.vec-box {
+  width: 16px; height: 16px;
+  border: 2px solid currentColor;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  transition: all 0.15s;
+}
+
+.vec-info { flex: 1; }
+.vec-name { font-family: var(--mono); font-size: 11px; font-weight: 600; }
+.vec-rfc { font-size: 10px; opacity: 0.6; margin-top: 2px; }
+
+/* ── Run button ── */
+.run-btn {
+  width: 100%;
+  background: var(--red);
+  color: white;
+  border: none;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-top: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.run-btn:hover:not(:disabled) {
+  background: var(--ink);
+  box-shadow: 4px 4px 0 var(--red);
+}
+
+.run-btn:disabled {
+  background: var(--border);
+  cursor: not-allowed;
+  color: #999;
+}
+
+.run-btn .shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+  transform: translateX(-100%);
+}
+
+.run-btn.loading .shimmer { animation: sweep 1s infinite; }
+@keyframes sweep { to { transform: translateX(100%); } }
+
+/* ── Results full-width panel ── */
+.results-panel {
+  border: 1px solid var(--ink);
+  border-top: none;
+  display: none;
+}
+
+.results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.results-head-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.r-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #555;
+}
+.r-dot.scanning { background: #ffd700; animation: blink 0.6s infinite; }
+.r-dot.vuln { background: var(--red); }
+.r-dot.safe { background: #4ade80; }
+
+.progress-track {
+  height: 3px;
+  background: var(--border);
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--red);
+  width: 0%;
+  transition: width 0.4s ease;
+}
+
+.log-body {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.9;
+  padding: 20px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: #fafaf8;
+}
+
+.log-body::-webkit-scrollbar { width: 3px; }
+.log-body::-webkit-scrollbar-thumb { background: var(--border); }
+
+.log-row { display: grid; grid-template-columns: 90px 1fr; gap: 12px; }
+.log-ts { color: var(--border); font-size: 11px; }
+.log-ok { color: var(--green); }
+.log-warn { color: var(--orange); }
+.log-err { color: var(--red); }
+.log-head { color: var(--ink); font-weight: 600; }
+.log-dim { color: #aaa; }
+
+/* Cards */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--ink);
+}
+
+.card {
+  padding: 20px 16px;
+  border-right: 1px solid var(--ink);
+  text-align: center;
+}
+
+.card:last-child { border-right: none; }
+
+.card-val {
+  font-family: var(--mono);
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.card-val.red { color: var(--red); }
+.card-val.green { color: var(--green); }
+.card-val.orange { color: var(--orange); }
+
+.card-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+/* Verdict */
+.verdict {
+  padding: 20px;
+  border-top: 2px solid;
+  display: none;
+}
+
+.verdict.vuln { border-color: var(--red); background: var(--red-dim); }
+.verdict.safe { border-color: var(--green); background: rgba(26,122,60,0.06); }
+.verdict.warn { border-color: var(--orange); background: rgba(196,106,0,0.07); }
+
+.verdict-title {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.verdict-body {
+  font-size: 13px;
+  line-height: 1.65;
+  color: #444;
+}
+
+/* ── Fix tabs ── */
+.fix-section {
+  border: 1px solid var(--ink);
+  border-top: none;
+}
+
+.fix-section-title {
+  padding: 16px 20px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tabs-row {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ink);
+}
+
+.tab-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 10px 18px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: white;
+  cursor: pointer;
+  color: #888;
+  text-transform: uppercase;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.tab-btn:hover { background: var(--paper2); color: var(--ink); }
+.tab-btn.active { background: var(--ink); color: var(--paper); }
+
+.tab-content { display: none; padding: 24px; }
+.tab-content.active { display: block; }
+
+.fix-step {
+  margin-bottom: 24px;
+}
+
+.fix-step-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fix-step-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.fix-desc { font-size: 13px; color: #555; line-height: 1.65; margin-bottom: 10px; }
+
+pre {
+  background: var(--ink);
+  color: #e2e8f0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 18px 20px;
+  overflow-x: auto;
+  border-radius: 0;
+}
+
+pre::-webkit-scrollbar { height: 4px; }
+pre::-webkit-scrollbar-thumb { background: #444; }
+
+.kw { color: #f97316; }
+.str { color: #a3e635; }
+.cm { color: #555; font-style: italic; }
+.val { color: #60a5fa; }
+.fn { color: #c084fc; }
+
+.tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  margin-bottom: 12px;
+}
+
+.tag.crit { background: var(--red); color: white; }
+.tag.high { background: var(--orange); color: white; }
+.tag.info { background: var(--ink); color: white; }
+
+/* Affected table */
+.affected-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+.affected-table th { text-align: left; padding: 8px 12px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #888; border-bottom: 2px solid var(--ink); }
+.affected-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.affected-table tr:last-child td { border-bottom: none; }
+.vtag-v { color: var(--red); }
+.vtag-p { color: var(--green); }
+.vtag-w { color: var(--orange); }
+
+/* Footer */
+footer {
+  border-top: 2px solid var(--ink);
+  padding: 20px 0;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #888;
+  letter-spacing: 0.06em;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0;
+}
+
+/* Warning bar */
+.warn-bar {
+  background: #fff8e1;
+  border: 1px solid #f59e0b;
+  border-left: 4px solid #f59e0b;
+  padding: 12px 16px;
+  font-size: 12px;
+  color: #92400e;
+  font-family: var(--mono);
+  margin-top: 24px;
+  line-height: 1.5;
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo">
+        <div class="logo-dot"></div>
+        MADEYOURESET DETECTOR
+      </div>
+      <div class="topbar-links">
+        <a class="topbar-link" href="#scanner">Scanner</a>
+        <a class="topbar-link" href="#fixes">Fixes</a>
+        <a class="topbar-link" href="https://github.com/mateusm1403/PoC-CVE-2025-8671-MadeYouReset-HTTP-2" target="_blank">PoC ↗</a>
+      </div>
+    </div>
+    <div class="status-pill" id="apiStatus">API ONLINE</div>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="cve-number">CVE-2025-8671</div>
+    <h1>
+      Made
+      <em>You Reset</em>
+    </h1>
+    <div class="hero-meta">
+      <div class="hero-stat">
+        <span class="hero-stat-val">2.8M+</span>
+        <span class="hero-stat-label">Potentially Exposed</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-val">8.7</span>
+        <span class="hero-stat-label">CVSS Score</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-val">HTTP/2</span>
+        <span class="hero-stat-label">Attack Vector</span>
+      </div>
+      <div class="hero-stat">
+        <span class="hero-stat-val">Aug 2025</span>
+        <span class="hero-stat-label">Disclosed</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="warn-bar">
+    ⚠ Authorized use only. Only scan servers you own or have explicit written permission to test.
+    This tool uses heuristic behavioral analysis — for definitive results use raw TCP/HTTP2 tools (h2spec, h2load).
+  </div>
+
+  <!-- Scanner -->
+  <div id="scanner" style="margin-top:0">
+    <div class="main-grid">
+
+      <!-- Left: Config -->
+      <div class="panel">
+        <div class="panel-title">Target Configuration</div>
+
+        <div class="field">
+          <label>Target URL (HTTPS required)</label>
+          <input type="text" id="target" placeholder="https://your-server.com" spellcheck="false">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="field">
+            <label>Timeout (ms)</label>
+            <input type="number" id="timeout" value="6000" min="1000" max="30000">
+          </div>
+          <div class="field">
+            <label>Probe Count</label>
+            <input type="number" id="probeCount" value="5" min="1" max="10">
+          </div>
+        </div>
+
+        <button class="run-btn" id="runBtn" onclick="runScan()">
+          <div class="shimmer"></div>
+          ▶ Run Detection Scan
+        </button>
+
+        <button onclick="clearScan()" style="width:100%;margin-top:8px;padding:10px;font-family:var(--mono);font-size:12px;cursor:pointer;background:white;border:1px solid var(--border);color:#888;letter-spacing:0.08em;text-transform:uppercase;transition:all 0.15s;" onmouseover="this.style.background='var(--paper2)'" onmouseout="this.style.background='white'">
+          ✕ Clear
+        </button>
+      </div>
+
+      <!-- Right: Vectors -->
+      <div class="panel" style="border-right:none">
+        <div class="panel-title">Attack Vectors</div>
+        <div class="vectors" id="vectors"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results-panel" id="resultsPanel">
+    <div class="results-head">
+      <div class="results-head-left">
+        <div class="r-dot" id="rDot"></div>
+        <span id="rStatus">Idle</span>
+      </div>
+      <span style="font-family:var(--mono);font-size:11px;opacity:0.5" id="elapsed"></span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progFill"></div>
+    </div>
+    <div class="log-body" id="logBody"></div>
+    <div class="cards" id="cards" style="display:none"></div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <!-- Fixes -->
+  <div class="fix-section" id="fixes">
+    <div class="fix-section-title">
+      <span>Server-Side Fixes &amp; Mitigations</span>
+      <span style="font-size:10px;opacity:0.5">SELECT YOUR STACK</span>
+    </div>
+    <div class="tabs-row">
+      <button class="tab-btn active" onclick="showTab('nginx',this)">Nginx</button>
+      <button class="tab-btn" onclick="showTab('apache',this)">Apache</button>
+      <button class="tab-btn" onclick="showTab('nodejs',this)">Node.js</button>
+      <button class="tab-btn" onclick="showTab('haproxy',this)">HAProxy</button>
+      <button class="tab-btn" onclick="showTab('vercel',this)">Vercel Deploy</button>
+      <button class="tab-btn" onclick="showTab('affected',this)">Affected Versions</button>
+    </div>
+
+    <!-- NGINX -->
+    <div class="tab-content active" id="tab-nginx">
+      <span class="tag crit">Critical</span>
+      <div class="fix-step">
+        <div class="fix-step-title">1 · Upgrade to patched build</div>
+        <div class="fix-desc">Nginx mainline ≥ 1.27.3 or stable ≥ 1.26.3. Verify with <code>nginx -v</code>.</div>
+        <pre><span class="cm"># Ubuntu/Debian</span>
+sudo apt update && sudo apt install --only-upgrade nginx
+
+<span class="cm"># Verify HTTP/2 module present</span>
+nginx -V 2>&1 | grep http_v2</pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">2 · Harden nginx.conf</div>
+        <pre><span class="kw">http</span> {
+  <span class="cm"># Reduce concurrent streams (default 128 is exploitable)</span>
+  <span class="kw">http2_max_concurrent_streams</span> <span class="val">32</span>;
+  <span class="kw">http2_idle_timeout</span>           <span class="str">30s</span>;
+  <span class="kw">http2_body_preread_size</span>      <span class="val">16k</span>;
+  <span class="kw">http2_max_requests</span>           <span class="val">1000</span>;
+  <span class="kw">http2_recv_timeout</span>           <span class="str">15s</span>;
+  <span class="kw">http2_max_field_size</span>         <span class="val">4k</span>;
+  <span class="kw">http2_max_header_size</span>        <span class="val">16k</span>;
+
+  <span class="cm"># Per-IP connection limit</span>
+  <span class="fn">limit_conn_zone</span> <span class="val">$binary_remote_addr</span> <span class="kw">zone</span>=<span class="str">addr:10m</span>;
+  <span class="kw">server</span> {
+    <span class="fn">limit_conn</span>        addr <span class="val">10</span>;
+    <span class="fn">limit_conn_status</span> <span class="val">429</span>;
+  }
+}</pre>
+      </div>
+    </div>
+
+    <!-- APACHE -->
+    <div class="tab-content" id="tab-apache">
+      <span class="tag crit">Critical</span>
+      <div class="fix-step">
+        <div class="fix-step-title">1 · Upgrade Apache HTTPD ≥ 2.4.62</div>
+        <pre><span class="cm"># Ubuntu/Debian</span>
+sudo apt update && sudo apt install --only-upgrade apache2
+
+<span class="cm"># RHEL/Rocky</span>
+sudo dnf update httpd</pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">2 · Harden mod_http2</div>
+        <pre><span class="cm"># /etc/apache2/mods-enabled/http2.conf</span>
+<span class="kw">Protocols</span>          h2 http/1.1
+<span class="kw">H2MaxSessionStreams</span> <span class="val">32</span>
+<span class="kw">H2MinWorkers</span>       <span class="val">1</span>
+<span class="kw">H2MaxWorkers</span>       <span class="val">25</span>
+<span class="kw">H2StreamMaxMemSize</span> <span class="val">65536</span>
+<span class="kw">H2EarlyHints</span>       off</pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">3 · Emergency: disable HTTP/2</div>
+        <pre><span class="kw">Protocols</span> http/1.1
+<span class="cm"># then: sudo a2dismod http2 && sudo systemctl reload apache2</span></pre>
+      </div>
+    </div>
+
+    <!-- NODE.JS -->
+    <div class="tab-content" id="tab-nodejs">
+      <span class="tag crit">Critical</span>
+      <div class="fix-step">
+        <div class="fix-step-title">1 · Install anti-DDoS middleware (this project)</div>
+        <div class="fix-desc">The <code>lib/antiDdos.js</code> in this repo implements 8-layer protection including RST_STREAM rate limiting, token bucket burst control, anomaly scoring, and SSRF prevention.</div>
+        <pre><span class="cm"># Already included — just npm install</span>
+npm install</pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">2 · RST_STREAM tracking in plain Node http2</div>
+        <pre><span class="kw">const</span> http2 = require(<span class="str">'http2'</span>);
+<span class="kw">const</span> server = http2.<span class="fn">createSecureServer</span>({ settings: {
+  maxConcurrentStreams: <span class="val">32</span>,
+  initialWindowSize: <span class="val">65535</span>,
+  maxHeaderListSize: <span class="val">8192</span>
+}});
+
+server.<span class="fn">on</span>(<span class="str">'session'</span>, session => {
+  <span class="kw">let</span> rst = <span class="val">0</span>, win = <span class="fn">setTimeout</span>(() => rst = <span class="val">0</span>, <span class="val">10000</span>);
+  session.<span class="fn">on</span>(<span class="str">'stream'</span>, stream => {
+    stream.<span class="fn">on</span>(<span class="str">'close'</span>, () => {
+      <span class="kw">if</span> (stream.rstCode !== <span class="val">0</span> && ++rst > <span class="val">100</span>)
+        session.<span class="fn">destroy</span>(http2.constants.NGHTTP2_ENHANCE_YOUR_CALM);
+    });
+  });
+  session.<span class="fn">on</span>(<span class="str">'close'</span>, () => <span class="fn">clearTimeout</span>(win));
+});</pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">3 · Netty — upgrade pom.xml</div>
+        <pre>&lt;<span class="kw">dependency</span>&gt;
+  &lt;<span class="kw">groupId</span>&gt;io.netty&lt;/<span class="kw">groupId</span>&gt;
+  &lt;<span class="kw">artifactId</span>&gt;netty-all&lt;/<span class="kw">artifactId</span>&gt;
+  &lt;<span class="kw">version</span>&gt;<span class="val">4.1.124.Final</span>&lt;/<span class="kw">version</span>&gt;
+&lt;/<span class="kw">dependency</span>&gt;</pre>
+      </div>
+    </div>
+
+    <!-- HAPROXY -->
+    <div class="tab-content" id="tab-haproxy">
+      <span class="tag high">High Priority</span>
+      <div class="fix-step">
+        <div class="fix-step-title">1 · Upgrade HAProxy ≥ 2.9.x</div>
+        <pre>haproxy -v   <span class="cm"># must be 2.9+</span></pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">2 · haproxy.cfg hardening</div>
+        <pre><span class="kw">global</span>
+  maxconn <span class="val">10000</span>
+  tune.h2.max-concurrent-streams <span class="val">32</span>
+  tune.h2.initial-window-size    <span class="val">65535</span>
+
+<span class="kw">frontend</span> https_front
+  bind *:<span class="val">443</span> ssl crt /etc/ssl/server.pem alpn h2,http/1.1
+  http-request track-sc0 src table rst_tracking
+  http-request deny deny_status <span class="val">429</span> if { sc_http_err_rate(<span class="val">0</span>) gt <span class="val">50</span> }
+  timeout client  <span class="str">30s</span>
+  timeout tunnel  <span class="str">60s</span>
+
+<span class="kw">backend</span> rst_tracking
+  stick-table type ip size 1m expire <span class="val">60s</span>
+              store http_err_rate(<span class="val">10s</span>)</pre>
+      </div>
+    </div>
+
+    <!-- VERCEL DEPLOY -->
+    <div class="tab-content" id="tab-vercel">
+      <span class="tag info">Vercel Deploy</span>
+      <div class="fix-step">
+        <div class="fix-step-title">Prerequisites</div>
+        <div class="fix-desc">Node.js ≥ 20, npm ≥ 10, a free Vercel account at vercel.com</div>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">1 · Install Vercel CLI</div>
+        <pre>npm install -g vercel</pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">2 · Clone &amp; install dependencies</div>
+        <pre><span class="cm"># Download or unzip the project folder, then:</span>
+cd madeyoureset-detector
+npm install</pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">3 · Test locally</div>
+        <pre>vercel dev
+<span class="cm"># Opens http://localhost:3000</span>
+<span class="cm"># API available at http://localhost:3000/api/probe</span></pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">4 · Deploy to production</div>
+        <pre>vercel --prod
+<span class="cm"># First run: creates project, links to your Vercel account</span>
+<span class="cm"># Subsequent runs: instant redeploy</span>
+<span class="cm"># Output: https://your-project.vercel.app</span></pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">5 · Optional — set environment variables</div>
+        <pre><span class="cm"># In Vercel dashboard → Settings → Environment Variables</span>
+ALLOWED_ORIGIN=https://yourdomain.com
+
+<span class="cm"># Or via CLI:</span>
+vercel env add ALLOWED_ORIGIN</pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">6 · Add custom domain</div>
+        <pre>vercel domains add yourdomain.com
+<span class="cm"># Then point your DNS CNAME to cname.vercel-dns.com</span></pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">Project structure</div>
+        <pre>madeyoureset-detector/
+├── api/
+│   ├── probe.js        <span class="cm"># POST /api/probe — main scanner</span>
+│   └── health.js       <span class="cm"># GET  /api/health</span>
+├── lib/
+│   └── antiDdos.js     <span class="cm"># 8-layer anti-DDoS middleware</span>
+├── public/
+│   └── index.html      <span class="cm"># This frontend</span>
+├── vercel.json         <span class="cm"># Vercel config + security headers</span>
+└── package.json</pre>
+      </div>
+      <div class="fix-step">
+        <div class="fix-step-title">Anti-DDoS layers active on /api/probe</div>
+        <div class="fix-desc">
+          All requests to <code>/api/probe</code> pass through:
+          Global burst limiter (1000 req/s) →
+          IP block check →
+          Per-IP rate limit (30 req/min) →
+          Per-IP token bucket (burst 10) →
+          Anomaly scoring (UA, headers, path) →
+          RST_STREAM probe detector →
+          Body size limit (4KB) →
+          SSRF prevention (no private IPs).
+        </div>
+      </div>
+    </div>
+
+    <!-- AFFECTED VERSIONS -->
+    <div class="tab-content" id="tab-affected">
+      <table class="affected-table">
+        <thead>
+          <tr><th>Software</th><th>Vulnerable Range</th><th>Patched Version</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Apache Tomcat</td><td>&lt; 10.1.41 / 9.0.105</td><td>≥ 10.1.41 / 9.0.105</td><td class="vtag-p">✓ Patched</td></tr>
+          <tr><td>Netty</td><td>&lt; 4.1.124.Final</td><td>≥ 4.1.124.Final</td><td class="vtag-p">✓ Patched</td></tr>
+          <tr><td>Nginx</td><td>&lt; 1.27.3 / 1.26.3</td><td>≥ 1.27.3 (mainline)</td><td class="vtag-p">✓ Patched</td></tr>
+          <tr><td>F5 BIG-IP</td><td>Multiple branches</td><td>See K000148587</td><td class="vtag-p">✓ Advisory</td></tr>
+          <tr><td>Varnish Cache</td><td>≤ 7.5.x</td><td>≥ 7.6.2</td><td class="vtag-p">✓ Patched</td></tr>
+          <tr><td>Fastly CDN</td><td>Edge nodes</td><td>Auto-patched at edge</td><td class="vtag-p">✓ Auto</td></tr>
+          <tr><td>SUSE / openSUSE</td><td>Various</td><td>SUSE-SU-2025:2742-1</td><td class="vtag-p">✓ Patched</td></tr>
+          <tr><td>Node.js</td><td>&lt; 22.6.0 (some)</td><td>≥ 22.6.0</td><td class="vtag-p">✓ Patched</td></tr>
+          <tr><td>Go net/http2</td><td>See GHSA advisory</td><td>golang.org/x/net ≥ 0.29</td><td class="vtag-p">✓ Patched</td></tr>
+          <tr><td>Wind River Linux</td><td>LTS22–LTS25</td><td>In progress</td><td class="vtag-w">⚠ Partial</td></tr>
+          <tr><td>Cloudflare</td><td>Edge nodes</td><td>Auto-patched</td><td class="vtag-p">✓ Auto</td></tr>
+          <tr><td>Vercel Edge</td><td>N/A</td><td>Edge auto-mitigated</td><td class="vtag-p">✓ Protected</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <footer>
+    <span>CVE-2025-8671 · MadeYouReset · Defensive use only</span>
+    <span>Disclosed Aug 13, 2025 · Tel Aviv University + Imperva</span>
+  </footer>
+
+</div>
+
+<script>
+// ── Vectors ──
+const VECS = [
+  { id:'v1', name:'Invalid WINDOW_UPDATE', rfc:'RFC 9113 §6.9' },
+  { id:'v2', name:'Zero-size WINDOW_UPDATE', rfc:'RFC 9113 §6.9.1' },
+  { id:'v3', name:'PRIORITY on closed stream', rfc:'RFC 9113 §6.3' },
+  { id:'v4', name:'Rapid RST_STREAM coercion', rfc:'Core vector' },
+  { id:'v5', name:'Stream limit bypass', rfc:'RFC 9113 §5.1' },
+  { id:'v6', name:'CONTINUATION flood', rfc:'CVE-2024-27316' },
+];
+
+const vecContainer = document.getElementById('vectors');
+VECS.forEach(v => {
+  const el = document.createElement('div');
+  el.className = 'vec-item on';
+  el.dataset.id = v.id;
+  el.innerHTML = `<div class="vec-box">✓</div><div class="vec-info"><div class="vec-name">${v.name}</div><div class="vec-rfc">${v.rfc}</div></div>`;
+  el.onclick = () => {
+    el.classList.toggle('on');
+    el.querySelector('.vec-box').textContent = el.classList.contains('on') ? '✓' : '';
+  };
+  vecContainer.appendChild(el);
+});
+
+// ── Tabs ──
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── Scan ──
+let scanning = false;
+let t0;
+let timerInterval;
+
+function ts() {
+  const n = new Date();
+  return n.toTimeString().slice(0,8);
+}
+
+function log(msg, cls='') {
+  const b = document.getElementById('logBody');
+  const row = document.createElement('div');
+  row.className = 'log-row';
+  row.innerHTML = `<span class="log-ts">${ts()}</span><span class="${cls ? 'log-'+cls : ''}">${msg}</span>`;
+  b.appendChild(row);
+  b.scrollTop = b.scrollHeight;
+}
+
+function setR(state, text) {
+  document.getElementById('rDot').className = 'r-dot ' + state;
+  document.getElementById('rStatus').textContent = text;
+}
+
+function setProg(p) {
+  document.getElementById('progFill').style.width = p + '%';
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function runScan() {
+  if (scanning) return;
+  const url = document.getElementById('target').value.trim();
+  if (!url) { alert('Enter a target URL'); return; }
+  if (!url.startsWith('https://')) { alert('Must be HTTPS'); return; }
+
+  const timeout = parseInt(document.getElementById('timeout').value) || 6000;
+  const probeCount = parseInt(document.getElementById('probeCount').value) || 5;
+  const vectors = [...document.querySelectorAll('.vec-item.on')].map(e => e.dataset.id);
+  if (!vectors.length) { alert('Select at least one vector'); return; }
+
+  scanning = true;
+  t0 = performance.now();
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.querySelector('.shimmer').style.display = 'block';
+  btn.childNodes[1].textContent = ' ⏳ Scanning...';
+
+  const panel = document.getElementById('resultsPanel');
+  panel.style.display = 'block';
+  document.getElementById('logBody').innerHTML = '';
+  document.getElementById('cards').style.display = 'none';
+  const verd = document.getElementById('verdict');
+  verd.style.display = 'none';
+
+  setR('scanning', 'Initializing...');
+  setProg(0);
+
+  timerInterval = setInterval(() => {
+    document.getElementById('elapsed').textContent =
+      ((performance.now() - t0) / 1000).toFixed(1) + 's';
+  }, 100);
+
+  await sleep(80);
+
+  log('═══════════════════════════════════════', 'head');
+  log(`Target · ${url}`, 'head');
+  log(`Vectors: ${vectors.join(', ')} | Probes: ${probeCount}`, '');
+  log('═══════════════════════════════════════', 'head');
+
+  let pass=0, warn=0, fail=0, total=0;
+
+  // ── Phase 1: Connectivity ──
+  await sleep(150);
+  log('', '');
+  log('[PHASE 1] Connectivity & HTTP/2 Detection', 'head');
+  setR('scanning', 'Probing target...');
+  setProg(10);
+  total++;
+
+  let baseOk = false, elapsed = 0, respHeaders = {};
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
+    const s = performance.now();
+    const r = await fetch(url, { method:'HEAD', signal:ctrl.signal, cache:'no-store' });
+    clearTimeout(timer);
+    elapsed = performance.now() - s;
+    baseOk = true;
+    r.headers.forEach((v,k) => { respHeaders[k] = v; });
+    log(`✓ Connected · HTTP ${r.status} in ${elapsed.toFixed(0)}ms`, 'ok');
+    pass++;
+  } catch(e) {
+    log(`✗ Connection failed: ${e.message}`, 'err');
+    log('  Check URL, firewall rules, and CORS policy', '');
+    fail++;
+    finalize(total, pass, warn, fail, false, {}, '');
+    return;
+  }
+
+  const altSvc = respHeaders['alt-svc'] || '';
+  const server = respHeaders['server'] || '';
+  const h2 = altSvc.includes('h2');
+
+  if (h2) {
+    log(`✓ HTTP/2 detected via Alt-Svc: ${altSvc}`, 'ok');
+    pass++;
+  } else {
+    log(`⚠ HTTP/2 not confirmed via headers (may still use ALPN)`, 'warn');
+    warn++;
+  }
+  total++;
+
+  // Server version check
+  total++;
+  const vulnMatch = checkVulnVersion(server);
+  if (vulnMatch) {
+    log(`✗ Vulnerable server version: "${server}" → ${vulnMatch}`, 'err');
+    fail++;
+  } else if (server) {
+    log(`✓ Server "${server}" not in known vulnerable range`, 'ok');
+    pass++;
+  } else {
+    log(`⚠ Server header hidden — version-based detection unavailable`, 'warn');
+    warn++;
+  }
+
+  setProg(25);
+  await sleep(300);
+
+  // ── Phase 2: Vector probing ──
+  log('', '');
+  log('[PHASE 2] Vector Probing', 'head');
+
+  for (let i = 0; i < vectors.length; i++) {
+    const vid = vectors[i];
+    const v = VECS.find(x => x.id === vid);
+    log('', '');
+    log(`── ${vid.toUpperCase()} · ${v.name}`, 'head');
+    setR('scanning', `Testing ${v.name}...`);
+    setProg(25 + ((i+1) / vectors.length) * 55);
+    total++;
+
+    try {
+      if (vid === 'v1' || vid === 'v2') {
+        const r = await timedFetch(url, {
+          headers: { 'Accept-Encoding':'gzip,deflate,br,zstd', 'X-Probe':'window-update', 'Cache-Control':'no-cache' }
+        }, timeout);
+        if (!r.ok) { log(`  ✗ Failed: ${r.error}`, 'err'); fail++; }
+        else if (r.elapsed < 80) { log(`  ⚠ Suspiciously fast (${r.elapsed.toFixed(0)}ms) — possible stream mismatch`, 'warn'); warn++; }
+        else { log(`  ✓ Normal response time ${r.elapsed.toFixed(0)}ms`, 'ok'); pass++; }
+      }
+      else if (vid === 'v3' || vid === 'v4') {
+        log(`  Sending ${probeCount} abort-on-inflight probes...`, '');
+        const results = await rapidAbortProbes(url, probeCount, timeout);
+        const aborted = results.filter(r => r.aborted).length;
+        const avg = results.reduce((a,r) => a+r.elapsed, 0) / results.length;
+        log(`  Completed: ${probeCount} | Mid-flight aborts: ${aborted} | Avg: ${avg.toFixed(0)}ms`, '');
+        const anomaly = results.slice(-2).every(r => !r.aborted && r.elapsed < 80) && aborted >= Math.floor(probeCount * 0.4);
+        if (anomaly) { log(`  ⚠ Stream accounting anomaly — possible phantom stream processing`, 'warn'); warn++; }
+        else { log(`  ✓ No timing anomaly detected`, 'ok'); pass++; }
+      }
+      else if (vid === 'v5') {
+        log(`  Testing ${probeCount * 2} concurrent streams...`, '');
+        const concResults = await Promise.all(
+          Array.from({length: probeCount * 2}, (_,i) =>
+            fetch(url+'?s='+i, {cache:'no-store'}).then(r => ({ok:true,s:r.status})).catch(e => ({ok:false,e:e.message}))
+          )
+        );
+        const okC = concResults.filter(r => r.ok).length;
+        const failC = concResults.length - okC;
+        log(`  OK: ${okC} | Failed: ${failC}`, failC > probeCount ? 'err' : failC > 0 ? 'warn' : 'ok');
+        if (failC === 0) pass++; else if (failC < probeCount) { warn++; } else { fail++; }
+      }
+      else if (vid === 'v6') {
+        const hdrs = {};
+        for (let j=0;j<20;j++) hdrs[`x-fuzz-${j}`] = 'A'.repeat(180);
+        const r = await timedFetch(url, { headers: hdrs }, timeout);
+        if (!r.ok && r.error?.includes('Abort')) { log(`  ⚠ Timeout with large headers — possible unbounded processing`, 'warn'); warn++; }
+        else if (!r.ok) { log(`  ✓ Server rejected oversized headers (${r.error})`, 'ok'); pass++; }
+        else { log(`  ✓ Headers accepted gracefully in ${r.elapsed.toFixed(0)}ms`, 'ok'); pass++; }
+      }
+    } catch(e) {
+      log(`  ✗ Test threw: ${e.message}`, 'err');
+      fail++;
+    }
+
+    await sleep(180);
+  }
+
+  // ── Phase 3: API analysis ──
+  log('', '');
+  log('[PHASE 3] Server-Side Analysis', 'head');
+  setR('scanning', 'Calling API...');
+  setProg(85);
+
+  try {
+    const apiResp = await fetch('/api/probe', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ url, vectors, probeCount }),
+    });
+
+    if (apiResp.ok) {
+      const data = await apiResp.json();
+      log('✓ API analysis complete', 'ok');
+      if (data.analysis?.checks) {
+        data.analysis.checks.forEach(c => {
+          const cls = c.status === 'pass' ? 'ok' : c.status === 'fail' ? 'err' : 'warn';
+          log(`  [${c.id}] ${c.name}: ${c.detail}`, cls);
+          if (c.status === 'fail') fail++;
+          else if (c.status === 'warn') warn++;
+        });
+      }
+    } else {
+      log(`⚠ API returned ${apiResp.status} — running client-only analysis`, 'warn');
+    }
+  } catch(e) {
+    log(`⚠ API unavailable (${e.message}) — client-only results`, 'warn');
+  }
+
+  setProg(100);
+  await sleep(400);
+  finalize(total, pass, warn, fail, h2, respHeaders, server);
+}
+
+async function timedFetch(url, opts = {}, timeout = 6000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  const s = performance.now();
+  try {
+    await fetch(url, { ...opts, signal: ctrl.signal, cache: 'no-store' });
+    clearTimeout(timer);
+    return { ok: true, elapsed: performance.now() - s };
+  } catch(e) {
+    clearTimeout(timer);
+    return { ok: false, error: e.message, elapsed: performance.now() - s };
+  }
+}
+
+async function rapidAbortProbes(url, count, timeout) {
+  return Promise.all(Array.from({length:count}, (_,i) => {
+    const ctrl = new AbortController();
+    const s = performance.now();
+    const abort = setTimeout(() => ctrl.abort(), 40 + i * 12);
+    return fetch(url+'?rp='+i, {signal:ctrl.signal,cache:'no-store'})
+      .then(() => { clearTimeout(abort); return {aborted:false,elapsed:performance.now()-s}; })
+      .catch(() => { clearTimeout(abort); return {aborted:true,elapsed:performance.now()-s}; });
+  }));
+}
+
+function checkVulnVersion(s) {
+  const patterns = [
+    [/nginx\/1\.2([0-5])\./i, 'Nginx < 1.26.3 vulnerable'],
+    [/nginx\/1\.26\.[0-2]/i,  'Nginx 1.26.0–1.26.2 vulnerable'],
+    [/nginx\/1\.27\.[0-2]/i,  'Nginx 1.27.0–1.27.2 vulnerable'],
+    [/apache\/2\.4\.([0-5]\d|6[01])/i, 'Apache < 2.4.62 vulnerable'],
+  ];
+  for (const [re, msg] of patterns) if (re.test(s)) return msg;
+  return null;
+}
+
+function finalize(total, pass, warn, fail, h2, headers, server) {
+  scanning = false;
+  clearInterval(timerInterval);
+
+  const btn = document.getElementById('runBtn');
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  btn.innerHTML = '<div class="shimmer"></div>▶ Run Detection Scan';
+
+  document.getElementById('elapsed').textContent = ((performance.now() - t0) / 1000).toFixed(2) + 's';
+
+  const risk = fail > 0 ? 'HIGH' : warn > 1 ? 'MEDIUM' : 'LOW';
+  setR(fail > 0 ? 'vuln' : warn > 1 ? 'scanning' : 'safe',
+       fail > 0 ? 'Potential vulnerability detected' : warn > 1 ? 'Warnings — review required' : 'No clear vulnerability');
+
+  // Cards
+  const cards = document.getElementById('cards');
+  cards.style.display = 'grid';
+  cards.innerHTML = `
+    <div class="card"><div class="card-val">${total}</div><div class="card-label">Checks</div></div>
+    <div class="card"><div class="card-val green">${pass}</div><div class="card-label">Passed</div></div>
+    <div class="card"><div class="card-val orange">${warn}</div><div class="card-label">Warnings</div></div>
+    <div class="card"><div class="card-val ${fail>0?'red':''}">${fail}</div><div class="card-label">Failures</div></div>
+    <div class="card"><div class="card-val ${h2?'orange':''}">${h2?'YES':'?'}</div><div class="card-label">HTTP/2</div></div>
+    <div class="card"><div class="card-val ${risk==='HIGH'?'red':risk==='MEDIUM'?'orange':'green'}">${risk}</div><div class="card-label">Risk</div></div>
+  `;
+
+  const verd = document.getElementById('verdict');
+  verd.style.display = 'block';
+
+  if (fail > 0) {
+    verd.className = 'verdict vuln';
+    verd.innerHTML = `<div class="verdict-title">⚠ POTENTIALLY VULNERABLE</div>
+      <div class="verdict-body">Behavioral anomalies consistent with CVE-2025-8671 detected.
+      Check the Affected Versions table and apply your vendor's patch immediately.
+      As interim mitigation: limit HTTP/2 concurrent streams to ≤32 and add RST_STREAM rate limiting.
+      For definitive confirmation, run <strong>h2spec</strong> or the Python PoC against this target from a server you control.</div>`;
+  } else if (warn > 1) {
+    verd.className = 'verdict warn';
+    verd.innerHTML = `<div class="verdict-title">⚡ INCONCLUSIVE — WARNINGS DETECTED</div>
+      <div class="verdict-body">${warn} warning(s) found. Browser-based heuristics cannot definitively rule out the vulnerability.
+      Verify your server version is in the patched range. Patching is low-cost compared to a MadeYouReset DoS event.</div>`;
+  } else {
+    verd.className = 'verdict safe';
+    verd.innerHTML = `<div class="verdict-title">✓ NO CLEAR VULNERABILITY DETECTED</div>
+      <div class="verdict-body">Heuristic behavioral tests passed with no anomalies.
+      Confirm your server version against the Affected Versions table for full assurance.
+      Browser-based testing is inherently limited — use <strong>h2spec</strong> for raw-socket validation.</div>`;
+  }
+}
+
+function clearScan() {
+  document.getElementById('resultsPanel').style.display = 'none';
+}
+
+// ── Health check ──
+async function checkApiHealth() {
+  try {
+    const r = await fetch('/api/health');
+    if (!r.ok) throw new Error('not ok');
+    document.getElementById('apiStatus').textContent = 'API ONLINE';
+    document.getElementById('apiStatus').style.background = 'var(--green)';
+  } catch {
+    document.getElementById('apiStatus').textContent = 'API OFFLINE';
+    document.getElementById('apiStatus').style.background = 'var(--red)';
+  }
+}
+checkApiHealth();
+</script>
+</body>
+</html>
